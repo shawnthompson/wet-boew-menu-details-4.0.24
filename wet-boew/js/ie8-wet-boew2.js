@@ -1,7 +1,7 @@
 /*!
  * Web Experience Toolkit (WET) / Boîte à outils de l'expérience Web (BOEW)
  * wet-boew.github.io/wet-boew/License-en.html / wet-boew.github.io/wet-boew/Licence-fr.html
- * v4.0.25-development - 2017-06-16
+ * v4.0.24 - 2017-06-16
  *
  *//**
  * @title WET-BOEW JQuery Helper Methods
@@ -1267,34 +1267,13 @@ $document.on( "ajax-fetch.wb", function( event ) {
 		fetchOpts = event.fetch,
 		urlParts = fetchOpts.url.split( " " ),
 		url = urlParts[ 0 ],
-		urlSubParts = url.split( "#" ),
-		urlHash = urlSubParts[ 1 ],
+		urlHash = url.split( "#" )[ 1 ],
 		selector = urlParts[ 1 ] || ( urlHash ? "#" + urlHash : false ),
-		fetchData, callerId, fetchNoCacheURL, urlSub,
-		fetchNoCache = fetchOpts.nocache,
-		fetchNoCacheKey = fetchOpts.nocachekey || wb.cacheBustKey || "wbCacheBust";
+		fetchData, callerId;
 
 	// Separate the URL from the filtering criteria
 	if ( selector ) {
 		fetchOpts.url = urlParts[ 0 ];
-	}
-
-	if ( fetchNoCache ) {
-		if ( fetchNoCache === "nocache" ) {
-			fetchNoCacheURL = wb.guid();
-		} else {
-			fetchNoCacheURL = wb.sessionGUID();
-		}
-		fetchNoCacheURL = fetchNoCacheKey + "=" + fetchNoCacheURL;
-
-		urlSub = urlSubParts[ 0 ];
-		if ( urlSub.indexOf( "?" ) !== -1 ) {
-			url = urlSub + "&" + fetchNoCacheURL + ( urlHash ? "#" + urlHash : "" );
-		} else {
-			url = urlSub + "?" + fetchNoCacheURL + ( urlHash ? "#" + urlHash : "" );
-		}
-
-		fetchOpts.url = url;
 	}
 
 	// Filter out any events triggered by descendants
@@ -1425,44 +1404,21 @@ var componentName = "wb-calevt",
 
 	processEvents = function( $elm ) {
 		var settings = $.extend( {}, window[ componentName ], $elm.data( dataAttr ) ),
-			year, month, events, containerId, $container,
-			minDate, maxDate, minDateTime, maxDateTime,
-			currDate = new Date(),
-			currDateTime = currDate.getTime();
+			year, month, events, minDate, containerId, $container;
 
 		events = getEvents( $elm );
 		containerId = $elm.data( "calevtSrc" );
 		$container = $( "#" + containerId ).addClass( componentName + "-cal" );
 
-		year = settings.year;
-		month = settings.month;
-
 		minDate = events.minDate;
-		maxDate = events.maxDate;
-		minDateTime = minDate.getTime();
-		maxDateTime = maxDate.getTime();
-
-		if ( !year && minDateTime < currDateTime && currDateTime < maxDateTime ) {
-			year = currDate.getFullYear();
-		} else if ( !year && currDateTime < minDateTime ) {
-			year = minDate.getFullYear();
-		} else if ( !year && maxDateTime < currDateTime ) {
-			year = maxDate.getFullYear();
-		}
-
-		if ( !month && minDateTime < currDateTime && currDate.getTime() < maxDateTime ) {
-			month = currDate.getMonth();
-		} else if ( !month && currDateTime < minDateTime ) {
-			month = minDate.getMonth();
-		} else if ( !month && maxDateTime < currDateTime ) {
-			month = maxDate.getMonth();
-		}
+		year = settings.year || minDate.getFullYear();
+		month = settings.month || minDate.getMonth();
 
 		wb.calendar.create( $container, {
 			year: year,
 			month: month,
 			minDate: minDate,
-			maxDate: maxDate,
+			maxDate: events.maxDate,
 			daysCallback: addEvents,
 			events: events.list,
 			$events: $elm
@@ -3642,21 +3598,12 @@ wb.add( selector );
  * page.
  */
 var componentName = "wb-data-ajax",
-	shortName = "wb-ajax",
 	selectors = [
 		"[data-ajax-after]",
 		"[data-ajax-append]",
 		"[data-ajax-before]",
 		"[data-ajax-prepend]",
-		"[data-ajax-replace]",
-		"[data-" + shortName + "]"
-	],
-	ajaxTypes = [
-		"before",
-		"replace",
-		"after",
-		"append",
-		"prepend"
+		"[data-ajax-replace]"
 	],
 	selectorsLength = selectors.length,
 	selector = selectors.join( "," ),
@@ -3671,41 +3618,31 @@ var componentName = "wb-data-ajax",
 	 * @param {jQuery Event} event Event that triggered this handler
 	 * @param {string} ajaxType The type of AJAX operation, either after, append, before or replace
 	 */
-	init = function( event ) {
+	init = function( event, ajaxType ) {
 
 		// Start initialization
 		// returns DOM object = proceed with init
 		// returns undefined = do not proceed with init (e.g., already initialized)
-		var ajxInfo = getAjxInfo( event.target ),
-			ajaxType = ajxInfo.type,
-			elm = wb.init( event, componentName + "-" + ajaxType, selector );
+		var elm = wb.init( event, componentName + "-" + ajaxType, selector );
 
-		if ( elm && ajxInfo.url ) {
+		if ( elm ) {
 
-			ajax.call( this, event, ajxInfo );
+			ajax.apply( this, arguments );
 
 			// Identify that initialization has completed
 			wb.ready( $( elm ), componentName, [ ajaxType ] );
 		}
 	},
 
-	ajax = function( event, ajxInfo ) {
+	ajax = function( event, ajaxType ) {
 		var elm = event.target,
 			$elm = $( elm ),
 			settings = window[ componentName ],
-			url,
-			fetchObj,
+			url = elm.getAttribute( "data-ajax-" + ajaxType ),
+			fetchObj = {
+				url: url
+			},
 			urlParts;
-
-		if ( !ajxInfo ) {
-			ajxInfo = getAjxInfo( elm );
-		}
-		url = ajxInfo.url;
-		fetchObj = {
-			url: url,
-			nocache: ajxInfo.nocache,
-			nocachekey: ajxInfo.nocachekey
-		};
 
 		// Detect CORS requests
 		if ( settings && ( url.substr( 0, 4 ) === "http" || url.substr( 0, 2 ) === "//" ) ) {
@@ -3723,121 +3660,62 @@ var componentName = "wb-data-ajax",
 			type: "ajax-fetch.wb",
 			fetch: fetchObj
 		} );
-	},
-
-	// Get Info and return { "url": "the/ajax/URL", "atype" }
-	getAjxInfo = function( elm ) {
-		var ajaxType,
-			len = ajaxTypes.length,
-			i, url, dtAttr, nocache, nocachekey;
-
-		for ( i = 0; i !== len; i += 1 ) {
-			ajaxType = ajaxTypes[ i ];
-			url = elm.getAttribute( "data-ajax-" + ajaxType );
-			if ( url ) {
-				break;
-			}
-		}
-
-		if ( !url ) {
-			dtAttr = wb.getData( $( elm ), shortName );
-
-			url = getURL( dtAttr.url, dtAttr.httpref );
-			if ( !url ) {
-				return {};
-			}
-			ajaxType = dtAttr.type;
-			if ( ajaxTypes.indexOf( ajaxType ) === -1 ) {
-				throw "Invalid ajax type";
-			}
-			nocache = dtAttr.nocache;
-			nocachekey = dtAttr.nocachekey;
-		}
-
-		return {
-			"url": url,
-			"type": ajaxType,
-			"nocache": nocache,
-			"nocachekey": nocachekey
-		};
-	},
-
-	// Return url for conditional display if regexp match http refer
-	getURL = function( url, referer ) {
-		var refers, httpRef, regHttpRef,
-			i, i_len;
-
-		if ( referer ) {
-			if ( !$.isArray( referer ) ) {
-				refers = [];
-				refers.push( referer );
-			} else {
-				refers = referer;
-			}
-
-			httpRef = window.document.referrer;
-			i_len = refers.length;
-			for ( i = 0; i !== i_len; i += 1 ) {
-				regHttpRef = new RegExp( refers[ i ] );
-				if ( regHttpRef.test( httpRef ) ) {
-					if ( $.isArray( url ) && url.length === i_len ) {
-						return url[ i ];
-					} else {
-						return url;
-					}
-				}
-			}
-		} else {
-			return url;
-		}
-		return "";
-	},
-
-	ajxFetched = function( elm, fetchObj ) {
-		var $elm = $( elm ),
-			ajxInfo = getAjxInfo( elm ),
-			ajaxType = ajxInfo.type,
-			content, jQueryCaching;
-
-		// ajax-fetched event
-		content = fetchObj.response;
-		if ( content &&  content.length > 0 ) {
-
-			//Prevents the force caching of nested resources
-			jQueryCaching = jQuery.ajaxSettings.cache;
-			jQuery.ajaxSettings.cache = true;
-
-			// "replace" is the only event that doesn't map to a jQuery function
-			if ( ajaxType === "replace" ) {
-				$elm.html( content );
-			} else {
-				$elm[ ajaxType ]( content );
-			}
-
-			//Resets the initial jQuery caching setting
-			jQuery.ajaxSettings.cache = jQueryCaching;
-
-			$elm.trigger( contentUpdatedEvent, { "ajax-type": ajaxType, "content": content } );
-		}
 	};
 
 $document.on( "timerpoke.wb " + initEvent + " " + updateEvent + " ajax-fetched.wb", selector, function( event ) {
-	var eventTarget = event.target;
+	var eventTarget = event.target,
+		ajaxTypes = [
+			"before",
+			"replace",
+			"after",
+			"append",
+			"prepend"
+		],
+		len = ajaxTypes.length,
+		$elm, ajaxType, i, content, jQueryCaching;
+
+	for ( i = 0; i !== len; i += 1 ) {
+		ajaxType = ajaxTypes[ i ];
+		if ( this.getAttribute( "data-ajax-" + ajaxType ) !== null ) {
+			break;
+		}
+	}
 
 	switch ( event.type ) {
 
 	case "timerpoke":
 	case "wb-init":
-		init( event );
+		init( event, ajaxType );
 		break;
 	case "wb-update":
-		ajax( event );
+		ajax( event, ajaxType );
 		break;
 	default:
 
 		// Filter out any events triggered by descendants
 		if ( event.currentTarget === eventTarget ) {
-			ajxFetched( eventTarget, event.fetch );
+			$elm = $( eventTarget );
+
+			// ajax-fetched event
+			content = event.fetch.response;
+			if ( content &&  content.length > 0 ) {
+
+				//Prevents the force caching of nested resources
+				jQueryCaching = jQuery.ajaxSettings.cache;
+				jQuery.ajaxSettings.cache = true;
+
+				// "replace" is the only event that doesn't map to a jQuery function
+				if ( ajaxType === "replace" ) {
+					$elm.html( content );
+				} else {
+					$elm[ ajaxType ]( content );
+				}
+
+				//Resets the initial jQuery caching setting
+				jQuery.ajaxSettings.cache = jQueryCaching;
+
+				$elm.trigger( contentUpdatedEvent, { "ajax-type": ajaxType, "content": content } );
+			}
 		}
 	}
 
@@ -4037,6 +3915,163 @@ $document.on( "refresh.wb", function() {
 
 // Add the timer poke to initialize the plugin
 wb.add( selector );
+
+} )( jQuery, window, wb );
+
+/**
+ * @title WET-BOEW Data Json [data-json-after], [data-json-append],
+ * [data-json-before], [data-json-prepend], [data-json-replace] and [data-json-replacewith]
+ * @overview Insert content extracted from JSON file.
+ * @license wet-boew.github.io/wet-boew/License-en.html / wet-boew.github.io/wet-boew/Licence-fr.html
+ * @author @duboisp
+ */
+( function( $, window, wb ) {
+"use strict";
+
+/*
+ * Variable and function definitions.
+ * These are global to the plugin - meaning that they will be initialized once per page,
+ * not once per instance of plugin on the page. So, this is a good place to define
+ * variables that are common to all instances of the plugin on a page.
+ */
+var componentName = "wb-data-json",
+	selectors = [
+		"[data-json-after]",
+		"[data-json-append]",
+		"[data-json-before]",
+		"[data-json-prepend]",
+		"[data-json-replace]",
+		"[data-json-replacewith]"
+	],
+	selectorsLength = selectors.length,
+	selector = selectors.join( "," ),
+	initEvent = "wb-init." + componentName,
+	updateEvent = "wb-update." + componentName,
+	contentUpdatedEvent = "wb-contentupdated",
+	$document = wb.doc,
+	s,
+
+	/**
+	 * @method init
+	 * @param {jQuery Event} event Event that triggered this handler
+	 * @param {string} ajaxType The type of JSON operation, either after, append, before or replace
+	 */
+	init = function( event, ajaxType ) {
+
+		// Start initialization
+		// returns DOM object = proceed with init
+		// returns undefined = do not proceed with init (e.g., already initialized)
+		var elm = wb.init( event, componentName + "-" + ajaxType, selector );
+
+		if ( elm ) {
+
+			ajax.apply( this, arguments );
+
+			// Identify that initialization has completed
+			wb.ready( $( elm ), componentName, [ ajaxType ] );
+		}
+	},
+
+	ajax = function( event, ajaxType ) {
+		var elm = event.target,
+			$elm = $( elm ),
+			settings = window[ componentName ],
+			url = elm.getAttribute( "data-json-" + ajaxType ),
+			fetchObj = {
+				url: url
+			},
+			urlParts;
+
+		// Detect CORS requests
+		if ( settings && ( url.substr( 0, 4 ) === "http" || url.substr( 0, 2 ) === "//" ) ) {
+			urlParts = wb.getUrlParts( url );
+			if ( ( wb.pageUrlParts.protocol !== urlParts.protocol || wb.pageUrlParts.host !== urlParts.host ) && ( !Modernizr.cors || settings.forceCorsFallback ) ) {
+				if ( typeof settings.corsFallback === "function" ) {
+					fetchObj.dataType = "jsonp";
+					fetchObj.jsonp = "callback";
+					fetchObj = settings.corsFallback( fetchObj );
+				}
+			}
+		}
+
+		$elm.trigger( {
+			type: "json-fetch.wb",
+			fetch: fetchObj
+		} );
+	};
+
+$document.on( "timerpoke.wb " + initEvent + " " + updateEvent + " json-fetched.wb", selector, function( event ) {
+	var eventTarget = event.target,
+		ajaxTypes = [
+			"before",
+			"replace",
+			"replacewith",
+			"after",
+			"append",
+			"prepend"
+		],
+		len = ajaxTypes.length,
+		$elm, ajaxType, i, content, jQueryCaching;
+
+	for ( i = 0; i !== len; i += 1 ) {
+		ajaxType = ajaxTypes[ i ];
+		if ( this.getAttribute( "data-json-" + ajaxType ) !== null ) {
+			break;
+		}
+	}
+
+	switch ( event.type ) {
+
+	case "timerpoke":
+	case "wb-init":
+		init( event, ajaxType );
+		break;
+	case "wb-update":
+		ajax( event, ajaxType );
+		break;
+	default:
+
+		// Filter out any events triggered by descendants
+		if ( event.currentTarget === eventTarget ) {
+			$elm = $( eventTarget );
+
+			// json-fetched event
+			content = event.fetch.response;
+			if ( content &&  content.length > 0 ) {
+
+				//Prevents the force caching of nested resources
+				jQueryCaching = jQuery.ajaxSettings.cache;
+				jQuery.ajaxSettings.cache = true;
+
+				// "replace" and "replaceWith" doesn't map to a jQuery function
+				if ( ajaxType === "replace" ) {
+					$elm.html( content );
+				} else if ( ajaxType === "replacewith" ) {
+					$elm.replaceWith( content );
+				} else {
+					$elm[ ajaxType ]( content );
+				}
+
+				//Resets the initial jQuery caching setting
+				jQuery.ajaxSettings.cache = jQueryCaching;
+
+				$elm.trigger( contentUpdatedEvent, { "ajax-type": ajaxType, "content": content } );
+			}
+		}
+	}
+
+	/*
+	 * Since we are working with events we want to ensure that we are being
+	 * passive about our control, so returning true allows for events to always
+	 * continue
+	 */
+	return true;
+} );
+
+// Add the timerpoke to initialize the plugin
+for ( s = 0; s !== selectorsLength; s += 1 ) {
+	wb.add( selectors[ s ] );
+}
 
 } )( jQuery, window, wb );
 
@@ -4502,66 +4537,6 @@ wb.add( selector );
 } )( jQuery, window, wb );
 
 /**
-* @title WET-BOEW Facebook embedded page
-* @overview Helps with implementing Facebook embedded pages.
-* @license wet-boew.github.io/wet-boew/License-en.html / wet-boew.github.io/wet-boew/Licence-fr.html
-* @author @pjackson28
-*/
-( function( $, window, wb ) {
-"use strict";
-
-	/*
-	* Variable and function definitions.
-	* These are global to the plugin - meaning that they will be initialized once per page,
-	* not once per instance of plugin on the page. So, this is a good place to define
-	* variables that are common to all instances of the plugin on a page.
-	*/
-var componentName = "wb-facebook",
-	selector = "." + componentName,
-	initEvent = "wb-init" + selector,
-	$document = wb.doc,
-	fbinited = false,
-
-	/**
-	* @method init
-	* @param {jQuery Event} event Event that triggered the function call
-	*/
-	init = function( event ) {
-
-		// Start initialization
-		// returns DOM object = proceed with init
-		// returns undefined = do not proceed with init (e.g., already initialized)
-		var ele = wb.init( event, componentName, selector ),
-			protocol = wb.pageUrlParts.protocol;
-
-		if ( ele ) {
-			Modernizr.load(
-				{
-					load: [ ( protocol.indexOf( "http" ) === -1 ? "http:" : protocol ) + "//connect.facebook.net/" + wb.lang + "_US/sdk.js" ],
-					complete: function() {
-						if ( !fbinited ) {
-							window.FB.init( {
-								version: "v2.4"
-							} );
-							fbinited = true;
-						}
-
-						window.FB.XFBML.parse( ele[ 0 ] );
-						wb.ready( $( ele ), componentName );
-					}
-				}
-			);
-		}
-	};
-
-$document.on( "timerpoke.wb " + initEvent, selector, init );
-
-// Add the timer poke to initialize the plugin
-wb.add( selector );
-
-} )( jQuery, window, wb );
-
-/**
  * @title WET-BOEW Favicon Plugin
  * @overview Provides the ability to add and update a page's favicons
  * @license wet-boew.github.io/wet-boew/License-en.html / wet-boew.github.io/wet-boew/Licence-fr.html
@@ -4752,6 +4727,32 @@ var componentName = "wb-feeds",
 	Templates = {
 
 		/**
+		 * [facebook template]
+		 * @param  {entry object} data
+		 * @return {string}	HTML string of formatted using Media Object (twitter bootstrap)
+		 */
+		facebook: function( data ) {
+
+			// Facebook feeds does not really do titles in ATOM RSS. It simply truncates content at 150 characters. We are using a JS based sentence
+			// detection algorithm to better split content and titles
+			var content = fromCharCode( data.content ),
+				title = content.replace( /(<([^>]+)>)/ig, "" ).match( /\(?[^\.\?\!]+[\.!\?]\)?/g ),
+				author = data.author.replace( /&amp;/g, "&" );
+
+			// Sanitize the HTML from Facebook - extra 'br' tags
+			content = content.replace( /(<br>\n?)+/gi, "<br />" );
+
+			return "<li class='media'><a class='pull-left' href=''><img src='" +
+				data.fIcon + "' alt='" + author +
+				"' height='64px' width='64px' class='media-object'/></a><div class='media-body'>" +
+				"<h4 class='media-heading'><a href='" + data.link + "'><span class='wb-inv'>" +
+				title[ 0 ] + " - </span>" + author + "</a><br />" +
+				( data.publishedDate !== "" ? " <small class='feeds-date text-right'><time>" +
+				wb.date.toDateISO( data.publishedDate, true ) + "</time></small>" : "" ) +
+				"</h4><p>" + content + "</p></div></li>";
+		},
+
+		/**
 		 * [fickr template]
 		 * @param  {entry object} data
 		 * @return {string}	HTML string for creating a photowall effect
@@ -4858,8 +4859,8 @@ var componentName = "wb-feeds",
 
 	/**
 	 * Helper function that builds the URL for the JSON request
-	 * Feeds well now use developer.yahoo.com/yql/console/ since ajax.googleapis.com/ajax/services/feed/ was depercated.
 	 * @method jsonRequest
+	 * http://ajax.googleapis.com/ajax/services/feed/load?v=1.0&callback=?&q=https%3A%2F%2Fwww.facebook.com%2Ffeeds%2Fpage.php%3Fid%3D318424514044%26format%3Drss20&num=20
 	 * @param {url} url URL of the feed.
 	 * @param {integer} limit Limit on the number of results for the JSON request to return.
 	 * @return {url} The URL for the JSON request
@@ -4939,7 +4940,9 @@ var componentName = "wb-feeds",
 					fetch.url = url;
 
 					// Let's bind the template to the Entries
-					if ( url.indexOf( "pinterest.com" ) > -1  ) {
+					if ( url.indexOf( "facebook.com" ) !== -1 ) {
+						fType = "facebook";
+					} else if ( url.indexOf( "pinterest.com" ) > -1  ) {
 						fType = "pinterest";
 					} else {
 						fType = "generic";
@@ -5262,47 +5265,6 @@ var componentName = "wb-fnote",
 			// Remove "first/premier/etc"-style text from certain footnote return links (via the child spans that hold those bits of text)
 			$elm.find( "dd p.fn-rtn a span span" ).remove();
 
-			// Listen for footnote reference links that get clicked
-			$document.on( "click vclick", "main :not(" + selector + ") sup a.fn-lnk", function( event ) {
-				var eventTarget = event.target,
-					which = event.which,
-					refId, $refLinkDest;
-
-				// Ignore middle/right mouse button
-				if ( !which || which === 1 ) {
-					refId = "#" + wb.jqEscape( eventTarget.getAttribute( "href" ).substring( 1 ) );
-					$refLinkDest = $document.find( refId );
-
-					$refLinkDest.find( "p.fn-rtn a" )
-								.attr( "href", "#" + eventTarget.parentNode.id );
-
-					// Assign focus to $refLinkDest
-					$refLinkDest.trigger( setFocusEvent );
-					return false;
-				}
-			} );
-
-			// Listen for footnote return links that get clicked
-			$document.on( "click vclick", selector + " dd p.fn-rtn a", function( event ) {
-				var which = event.which,
-					ref,
-					refId;
-
-				// Ignore middle/right mouse button
-				if ( !which || which === 1 ) {
-					ref = event.target.getAttribute( "href" );
-
-					// Focus on associated referrer link (if the return link points to an ID)
-					if ( ref.charAt( 0 ) === "#" ) {
-						refId = "#" + wb.jqEscape( ref.substring( 1 ) );
-
-						// Assign focus to the link
-						$document.find( refId + " a" ).trigger( setFocusEvent );
-						return false;
-					}
-				}
-			} );
-
 			// Identify that initialization has completed
 			wb.ready( $elm, componentName );
 		}
@@ -5310,6 +5272,47 @@ var componentName = "wb-fnote",
 
 // Bind the init event of the plugin
 $document.on( "timerpoke.wb " + initEvent, selector, init );
+
+// Listen for footnote reference links that get clicked
+$document.on( "click vclick", "main :not(" + selector + ") sup a.fn-lnk", function( event ) {
+	var eventTarget = event.target,
+		which = event.which,
+		refId, $refLinkDest;
+
+	// Ignore middle/right mouse button
+	if ( !which || which === 1 ) {
+		refId = "#" + wb.jqEscape( eventTarget.getAttribute( "href" ).substring( 1 ) );
+		$refLinkDest = $document.find( refId );
+
+		$refLinkDest.find( "p.fn-rtn a" )
+					.attr( "href", "#" + eventTarget.parentNode.id );
+
+		// Assign focus to $refLinkDest
+		$refLinkDest.trigger( setFocusEvent );
+		return false;
+	}
+} );
+
+// Listen for footnote return links that get clicked
+$document.on( "click vclick", selector + " dd p.fn-rtn a", function( event ) {
+	var which = event.which,
+		ref,
+		refId;
+
+	// Ignore middle/right mouse button
+	if ( !which || which === 1 ) {
+		ref = event.target.getAttribute( "href" );
+
+		// Focus on associated referrer link (if the return link points to an ID)
+		if ( ref.charAt( 0 ) === "#" ) {
+			refId = "#" + wb.jqEscape( ref.substring( 1 ) );
+
+			// Assign focus to the link
+			$document.find( refId + " a" ).trigger( setFocusEvent );
+			return false;
+		}
+	}
+} );
 
 // Add the timer poke to initialize the plugin
 wb.add( selector );
@@ -5456,7 +5459,6 @@ var componentName = "wb-frmvld",
 						// In this case we will place them in the associated label element
 						errorPlacement: function( $error, $element ) {
 							var type = $element.attr( "type" ),
-								group = $element.attr( "data-rule-require_from_group" ),
 								$fieldset, $legend;
 
 							$error.data( "element-id", $element.attr( "id" ) );
@@ -5473,35 +5475,6 @@ var componentName = "wb-frmvld",
 									}
 								}
 							}
-
-							if ( group ) {
-								$fieldset = $element.closest( "fieldset" );
-								if ( $fieldset.length !== 0 ) {
-									$legend = $fieldset.find( "legend" ).first();
-									if ( $legend.length !== 0 && $fieldset.find( "input[name='" + $element.attr( "name" ) + "']" ) !== 1 ) {
-										var $strong = $legend.find( "strong.error" ),
-											id = $legend.attr( "id" );
-
-										if ( $strong.length > 0 ) {
-											$strong.remove();
-										}
-
-										if ( !id ) {
-											id = "required-group-" + idCount;
-											idCount += 1;
-
-											$legend.attr( "id", id );
-										}
-
-										$error.data( "element-id", id );
-										$error.attr( "id", id );
-										$error.appendTo( $legend );
-
-										return;
-									}
-								}
-							}
-
 							$error.appendTo( $form.find( "label[for='" + $element.attr( "id" ) + "']" ) );
 							return;
 						},
@@ -5615,22 +5588,10 @@ var componentName = "wb-frmvld",
 							}
 
 						}, /* End of showErrors() */
-
 						invalidHandler: function() {
 							submitted = true;
-						},
-
-						/* adds on tab validation */
-						onfocusout: function( element ) {
-							this.element( element );
 						}
-
 					} ); /* end of validate() */
-
-					/* fixes validation issue (see PR #7913) */
-					$form.on( "change", "input[type=date], input[type=file], select", function() {
-						$form.validate().element( this );
-					} );
 
 					// Clear the form and remove error messages on reset
 					$document.on( "click vclick touchstart", selector + " input[type=reset]", function( event ) {
@@ -5722,6 +5683,139 @@ $document.on( "timerpoke.wb " + initEvent, selector, init );
 wb.add( selector );
 
 } )( jQuery, wb );
+
+/**
+ * @title WET-BOEW JSON Fetch [ json-fetch ]
+ * @overview Load and filter data from a JSON file
+ * @license wet-boew.github.io/wet-boew/License-en.html / wet-boew.github.io/wet-boew/Licence-fr.html
+ * @author @duboisp
+ */
+/*global jsonpointer */
+( function( $, wb, window ) {
+"use strict";
+
+/*
+ * Variable and function definitions.
+ * These are global to the plugin - meaning that they will be initialized once per page,
+ * not once per instance of plugin on the page. So, this is a good place to define
+ * variables that are common to all instances of the plugin on a page.
+ */
+var $document = wb.doc,
+	component = "json-fetch",
+	fetchEvent = component + ".wb",
+	jsonCache = component + "cache",
+	jsonCacheBacklog = component + "backlog",
+	completeJsonFetch = function( callerId, response, status, xhr, selector ) {
+		if ( selector ) {
+			response = jsonpointer.get( response, selector );
+		}
+
+		$( "#" + callerId ).trigger( {
+			type: "json-fetched.wb",
+			fetch: {
+				response: response,
+				status: status,
+				xhr: xhr
+			}
+		}, this );
+	};
+
+// Event binding
+$document.on( fetchEvent, function( event ) {
+
+	// TODO: Remove event.element in future versions
+	var caller = event.element || event.target,
+		fetchOpts = event.fetch,
+		urlParts = fetchOpts.url.split( "#" ),
+		url = urlParts[ 0 ],
+		selector = urlParts[ 1 ] || false,
+		callerId,
+		uri = "json:" + url, cachedResponse;
+
+	// Separate the URL from the filtering criteria
+	if ( selector ) {
+		fetchOpts.url = url;
+	}
+
+	// Filter out any events triggered by descendants
+	if ( caller === event.target || event.currentTarget === event.target ) {
+
+		Modernizr.load( {
+
+			load: "site!deps/jsonpointer" + wb.getMode() + ".js",
+
+			complete: function() {
+
+				if ( !caller.id ) {
+					caller.id = wb.getId();
+				}
+				callerId = caller.id;
+
+				if ( !window[ jsonCache ] ) {
+					window[ jsonCache ] = { };
+					window[ jsonCacheBacklog ] = { };
+				}
+
+				if ( !fetchOpts.nocache ) {
+					cachedResponse = window[ jsonCache ][ uri ];
+
+					if ( cachedResponse ) {
+						completeJsonFetch( callerId, cachedResponse, "success", undefined, selector );
+						return;
+					} else {
+						if ( !window[ jsonCacheBacklog ][ uri ] ) {
+							window[ jsonCacheBacklog ][ uri ] = [ ];
+						} else {
+							window[ jsonCacheBacklog ][ uri ].push( {
+								"callerId": callerId,
+								"selector": selector
+							} );
+							return;
+						}
+					}
+				}
+
+				$.ajax( fetchOpts )
+					.done( function( response, status, xhr ) {
+						var i, i_len, i_cache, backlog;
+						if ( !fetchOpts.nocache ) {
+							try {
+								window[ jsonCache ][ uri ] = response;
+							} catch ( error ) {
+								return;
+							}
+						}
+
+						completeJsonFetch( callerId, response, status, xhr, selector );
+
+						if ( window[ jsonCacheBacklog ][ uri ] ) {
+							backlog = window[ jsonCacheBacklog ][ uri ];
+
+							i_len = backlog.length;
+
+							for ( i = 0; i !== i_len; i += 1 ) {
+								i_cache = backlog[ i ];
+								completeJsonFetch( i_cache.callerId, response, status, xhr, i_cache.selector );
+							}
+						}
+
+					} )
+					.fail( function( xhr, status, error ) {
+						$( "#" + callerId ).trigger( {
+							type: "json-failed.wb",
+							fetch: {
+								xhr: xhr,
+								status: status,
+								error: error
+							}
+						}, this );
+					}, this );
+			}
+		} );
+	}
+} );
+
+} )( jQuery, wb, window );
 
 /**
  * @title WET-BOEW Lightbox
@@ -5888,7 +5982,6 @@ var componentName = "wb-lbx",
                         .find( ".activate-open" )
                         .trigger( "wb-activate" );
 
-					this.contentContainer.attr( "data-pgtitle", document.getElementsByTagName( "H1" )[ 0 ].textContent );
 				},
 				close: function() {
 					$document.find( "body" ).removeClass( "wb-modal" );
@@ -6148,6 +6241,8 @@ var componentName = "wb-menu",
 			$subMenu = $elm.siblings( "ul" );
 
 			$elm.attr( {
+				"aria-posinset": ( i + 1 ),
+				"aria-setsize": length,
 				role: "menuitem"
 			} );
 
@@ -6176,11 +6271,12 @@ var componentName = "wb-menu",
 		// Use details/summary for the collapsible mechanism
 		var k, $elm, elm, $item, $subItems, subItemsLength,
 			$section = $( section ),
-			menuitem = " role='menuitem'",
+			posinset = "' aria-posinset='",
+			menuitem = " role='menuitem' aria-setsize='",
 			sectionHtml = "<li><details>" + "<summary class='mb-item" +
 				( $section.hasClass( "wb-navcurr" ) || $section.children( ".wb-navcurr" ).length !== 0 ? " wb-navcurr'" : "'" ) +
-				" aria-haspopup='true'> <span" + menuitem + ">" +
-				$section.text() + "</span></summary>" +
+				menuitem + sectionsLength + posinset + ( sectionIndex + 1 ) +
+				"' aria-haspopup='true'>" + $section.text() + "</summary>" +
 				"<ul class='list-unstyled mb-sm' role='menu' aria-expanded='false' aria-hidden='true'>";
 
 		// Convert each of the list items into WAI-ARIA menuitems
@@ -6194,8 +6290,9 @@ var componentName = "wb-menu",
 			if ( elm && subItemsLength === 0 && elm.nodeName.toLowerCase() === "a" ) {
 				sectionHtml += "<li>" + $item[ 0 ].innerHTML.replace(
 						/(<a\s)/,
-						"$1" + menuitem +
-							" tabindex='-1' "
+						"$1" + menuitem + itemsLength +
+							posinset + ( k + 1 ) +
+							"' tabindex='-1' "
 					) + "</li>";
 			} else {
 				sectionHtml += createCollapsibleSection( elm, k, itemsLength, $subItems, $subItems.length );
@@ -6248,8 +6345,9 @@ var componentName = "wb-menu",
 					sectionHtml += "<li class='no-sect'>" +
 						linkHtml.replace(
 							/(<a\s)/,
-							"$1 class='mb-item' " + "role='menuitem'" +
-								" tabindex='-1' "
+							"$1 class='mb-item' " + "role='menuitem' aria-setsize='" +
+								sectionsLength + "' aria-posinset='" + ( j + 1 ) +
+								"' tabindex='-1' "
 						) + "</li>";
 				}
 			}
@@ -6365,11 +6463,11 @@ var componentName = "wb-menu",
 				}
 
 				// Let's now populate the DOM since we have done all the work in a documentFragment
-				panelDOM.innerHTML = "<div class='modal-header'><div class='modal-title'>" +
+				panelDOM.innerHTML = "<header class='modal-header'><div class='modal-title'>" +
 						document.getElementById( "wb-glb-mn" )
 							.getElementsByTagName( "h2" )[ 0 ]
 								.innerHTML +
-						"</div></div><div class='modal-body'>" + panel + "</div>";
+						"</div></header><div class='modal-body'>" + panel + "</div>";
 				panelDOM.className += " wb-overlay modal-content overlay-def wb-panel-r";
 				$panel
 					.trigger( "wb-init.wb-overlay" )
@@ -8053,7 +8151,6 @@ var componentName = "wb-overlay",
 	closeClass = "overlay-close",
 	linkClass = "overlay-lnk",
 	ignoreOutsideClass = "outside-off",
-	OverlayOpenFlag = "wb-overlay-dlg",
 	initialized = false,
 	sourceLinks = {},
 	setFocusEvent = "setfocus.wb",
@@ -8070,7 +8167,7 @@ var componentName = "wb-overlay",
 		// returns DOM object = proceed with init
 		// returns undefined = do not proceed with init (e.g., already initialized)
 		var elm = wb.init( event, componentName, selector ),
-			$elm, footer, closeTextFtr, overlayCloseFtr, $header, closeText, overlayClose;
+			$elm, $header, closeText, overlayClose;
 
 		if ( elm ) {
 			$elm = $( elm );
@@ -8087,43 +8184,6 @@ var componentName = "wb-overlay",
 				};
 			}
 
-			// One left and right panels add close button
-			var isPanel = ( $elm.attr( "class" ).indexOf( "wb-panel" ) > -1 ) ? true : false,
-				isPopup = ( $elm.attr( "class" ).indexOf( "wb-popup" ) > -1 ) ? true : false;
-			if ( isPanel || isPopup ) {
-				var hasFooter, closeClassFtr, spanTextFtr, buttonStyle = "";
-
-				footer = $elm.find( ".modal-footer" )[ 0 ];
-				hasFooter = ( footer && footer.length !== 0 ) ? true : false;
-				closeClassFtr = ( $elm.hasClass( "wb-panel-l" ) ? "pull-right " : "pull-left " )  + closeClass;
-
-				if ( hasFooter ) {
-					spanTextFtr = footer.innerHTML + i18nText.space + i18nText.esc;
-				} else {
-					footer = document.createElement( "div" );
-					footer.setAttribute( "class", "modal-footer" );
-					spanTextFtr = i18nText.esc;
-				}
-
-				closeTextFtr = i18nText.close;
-				spanTextFtr = spanTextFtr.replace( "'", "&#39;" );
-
-				if ( isPopup ) {
-					footer.style.border = "0";
-				}
-
-				overlayCloseFtr = "<button type='button' id='ftrClose' class='btn btn-sm btn-default " + closeClassFtr +
-					"' style='" + buttonStyle +
-					"' title='" + closeTextFtr + " " + spanTextFtr + "'>" +
-					closeTextFtr +
-					"<span class='wb-inv'>" + spanTextFtr + "</span></button>";
-
-				$( footer ).append( overlayCloseFtr );
-				if ( !hasFooter ) {
-					$elm.append( footer );
-				}
-			}
-
 			// Add close button
 			$header = $elm.find( ".modal-title" );
 			if ( $header.length !== 0 ) {
@@ -8133,7 +8193,7 @@ var componentName = "wb-overlay",
 				closeText = i18nText.closeOverlay;
 			}
 			closeText = closeText.replace( "'", "&#39;" );
-			overlayClose = "<button type='button' id='hdrClose' class='mfp-close " + closeClass +
+			overlayClose = "<button type='button' class='mfp-close " + closeClass +
 				"' title='" + closeText + "'>&#xd7;<span class='wb-inv'> " +
 				closeText + "</span></button>";
 
@@ -8152,11 +8212,6 @@ var componentName = "wb-overlay",
 		$overlay
 			.addClass( "open" )
 			.attr( "aria-hidden", "false" );
-
-		if ( $overlay.hasClass( "wb-popup-full" ) || $overlay.hasClass( "wb-popup-mid" ) ) {
-			$overlay.attr( "data-pgtitle", document.getElementsByTagName( "H1" )[ 0 ].textContent );
-			$document.find( "body" ).addClass( OverlayOpenFlag );
-		}
 
 		if ( !noFocus ) {
 			$overlay
@@ -8180,10 +8235,6 @@ var componentName = "wb-overlay",
 		$overlay
 			.removeClass( "open" )
 			.attr( "aria-hidden", "true" );
-
-		if ( $overlay.hasClass( "wb-popup-full" ) || $overlay.hasClass( "wb-popup-mid" ) ) {
-			$document.find( "body" ).removeClass( OverlayOpenFlag );
-		}
 
 		if ( userClosed ) {
 			$overlay.addClass( "user-closed" );
@@ -9499,6 +9550,29 @@ var componentName = "wb-tables",
 						}
 					} );
 
+					/*
+					 * Extend type detection
+					 */
+
+					// Formatted numbers detection
+					// Based on: http://datatables.net/plug-ins/type-detection#formatted_numbers
+					dataTableExt.aTypes.unshift(
+						function( sData ) {
+
+							// Strip off HTML tags and all non-alpha-numeric characters (except minus sign)
+							var deformatted = sData.replace( /<[^>]*>/g, "" ).replace( /[^\d\-\/a-zA-Z]/g, "" );
+							if ( $.isNumeric( deformatted ) || deformatted === "-" ) {
+								return "formatted-num";
+							}
+							return null;
+						}
+					);
+
+					// Remove HTML tags before doing any filtering for formatted numbers
+					dataTableExt.type.search[ "formatted-num" ] = function( data ) {
+						return data.replace( /<[^>]*>/g, "" );
+					};
+
 					// Add the container or the sorting icons
 					$elm.find( "th" ).append( "<span class='sorting-cnt'><span class='sorting-icons'></span></span>" );
 
@@ -9514,22 +9588,7 @@ $document.on( "timerpoke.wb " + initEvent, selector, init );
 
 // Handle the draw.dt event
 $document.on( "init.dt draw.dt", selector, function( event, settings ) {
-	var $elm = $( event.target ),
-		pagination = $elm.next( ".bottom" ).find( "div:first-child" ),
-		paginate_buttons = $elm.next( ".bottom" ).find( ".paginate_button" ),
-		ol = document.createElement( "OL" ),
-		li = document.createElement( "LI" );
-
-	// Update Pagination List
-	for ( var i = 0; i < paginate_buttons.length; i++ ) {
-		var item = li.cloneNode( true );
-		item.appendChild( paginate_buttons[ i ] );
-		ol.appendChild( item );
-	}
-
-	ol.className = "pagination mrgn-tp-0 mrgn-bttm-0";
-	pagination.empty();
-	pagination.append( ol );
+	var $elm = $( event.target );
 
 	// Update the aria-pressed properties on the pagination buttons
 	// Should be pushed upstream to DataTables
@@ -10632,12 +10691,6 @@ var componentName = "wb-txthl",
 
 			if ( searchCriteria ) {
 
-				// Strip html
-				var map = { "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;", "'": "&#039;" };
-				searchCriteria = searchCriteria.replace( /[&<>"']/g, function( m ) {
-					return map[ m ];
-				} );
-
 				// Make sure that we're not checking for text within a tag; only the text outside of tags.
 				searchCriteria = "(?=([^>]*<))([\\s'])?(" + searchCriteria + ")(?!>)";
 
@@ -11252,11 +11305,7 @@ var componentName = "wb-disable",
 			$html = wb.html,
 			i18n = wb.i18n,
 			pageUrl = wb.pageUrlParts,
-			li, param,
-			noticeHeader = i18n( "disable-notice-h" ),
-			noticeBody = i18n( "disable-notice" ),
-			noticehtml = "<section",
-			noticehtmlend = "</a>.</p></section>";
+			li, param;
 
 		if ( elm ) {
 			li = document.createElement( "li" );
@@ -11264,7 +11313,7 @@ var componentName = "wb-disable",
 
 			// Rebuild the query string
 			for ( param in pageUrl.params ) {
-				if ( param && pageUrl.params.hasOwnProperty( param ) && param !== "wbdisable" ) {
+				if ( pageUrl.params.hasOwnProperty( param ) && param !== "wbdisable" ) {
 					nQuery += param + "=" + pageUrl.params[ param ] + "&#38;";
 				}
 			}
@@ -11279,9 +11328,11 @@ var componentName = "wb-disable",
 						localStorage.setItem( "wbdisable", "true" );
 					} catch ( e ) {}
 
-					// Add notice and link to re-enable WET plugins and polyfills
-					noticehtml = noticehtml + " class='alert alert-warning text-center'><h2>" + noticeHeader + "</h2><p>" + noticeBody + "</p><p><a rel='alternate' property='significantLink' href='" + nQuery + "wbdisable=false'>" + i18n( "wb-enable" ) + noticehtmlend;
-					$( elm ).after( noticehtml );
+					// Append the Standard version link
+					li.innerHTML = "<a class='wb-sl' href='" + nQuery + "wbdisable=false'>" + i18n( "wb-enable" ) + "</a>";
+
+					// Add link to re-enable WET plugins and polyfills
+					elm.appendChild( li );
 					return true;
 				} else {
 					$html.addClass( "wb-enable" );
@@ -11291,19 +11342,12 @@ var componentName = "wb-disable",
 						// Store preference for WET plugins and polyfills to be enabled in localStorage
 						localStorage.setItem( "wbdisable", "false" );
 					}
-
-					// Remove variable from URL
-					var lc = window.location.href.replace( "wbdisable=false", "" ).replace( "?#", "#" );
-					if ( lc.indexOf( "?" ) === ( lc.length - 1 ) ) {
-						lc = lc.replace( "?", "" );
-					}
-					window.history.replaceState( "", "", lc );
 				}
 			} catch ( error ) {
 			}
 
 			// Append the Basic HTML version link version
-			li.innerHTML = "<a class='wb-sl' rel='alternate' href='" + nQuery + "wbdisable=true'>" + i18n( "wb-disable" ) + "</a>";
+			li.innerHTML = "<a class='wb-sl' href='" + nQuery + "wbdisable=true'>" + i18n( "wb-disable" ) + "</a>";
 
 			// Add link to disable WET plugins and polyfills
 			elm.appendChild( li );
